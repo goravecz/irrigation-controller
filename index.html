@@ -9,6 +9,7 @@
   <title>Hunter Zones</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -146,8 +147,9 @@
       flex-shrink: 0;
       transition: background 0.3s;
     }
-    .status-dot.connected { background: var(--gold-light); box-shadow: 0 0 8px var(--gold); }
-    .status-dot.error     { background: var(--terra); }
+    .status-dot.connected   { background: var(--gold-light); box-shadow: 0 0 8px var(--gold); }
+    .status-dot.connecting  { background: var(--gold-light); animation: pulse 1s ease-in-out infinite; }
+    .status-dot.error       { background: var(--terra); }
 
     /* ── Duration ── */
     .duration-row { display: flex; flex-direction: column; gap: 10px; }
@@ -625,6 +627,7 @@ const ZONE_COUNT = 8;
 let duration = 10;
 let renameTarget = null;
 let connMode = 'mqtt';
+let mqttClient = null;
 
 const zones = Array.from({ length: ZONE_COUNT }, (_, i) => ({
   id: i + 1,
@@ -652,10 +655,8 @@ function saveSettingsStore(s) {
 function render() {
   const grid = document.getElementById('zoneGrid');
   grid.innerHTML = '';
-  let activeCount = 0;
 
   zones.forEach(z => {
-    if (z.active) activeCount++;
 
     const card = document.createElement('div');
     card.className = 'zone-card' + (z.active ? ' active' : '');
@@ -682,10 +683,6 @@ function render() {
 
     grid.appendChild(card);
   });
-
-  const ac = document.getElementById('activeCount');
-  ac.textContent = activeCount > 0 ? `${activeCount} running 💧` : '';
-  ac.classList.toggle('visible', activeCount > 0);
 }
 
 function escHtml(s) {
@@ -798,10 +795,10 @@ document.getElementById('renameInput').addEventListener('keydown', e => {
 // ── Settings ───────────────────────────────────────────
 function openSettings() {
   const s = loadSettings();
-  if (s.broker)  document.getElementById('cfgBroker').value  = s.broker;
-  if (s.topic)   document.getElementById('cfgTopic').value   = s.topic;
-  if (s.user)    document.getElementById('cfgUser').value    = s.user;
-  if (s.restUrl) document.getElementById('cfgRestUrl').value = s.restUrl;
+  document.getElementById('cfgBroker').value  = s.broker  || 'wss://1cb8c60d5f7f49e4a768e6112e5adfbe.s1.eu.hivemq.cloud:8884/mqtt';
+  document.getElementById('cfgTopic').value   = s.topic   || 'hunter/zone';
+  document.getElementById('cfgUser').value    = s.user    || 'goravecz';
+  document.getElementById('cfgRestUrl').value = s.restUrl || '';
   document.getElementById('settingsModal').classList.add('open');
 }
 function closeSettings(e) {
@@ -826,30 +823,41 @@ function saveSettings() {
   };
   saveSettingsStore(s);
   closeSettings();
-  showToast('✅ Settings saved');
-  setStatus('disconnected');
-  // TODO: init real MQTT / REST connection
+  connectMqtt();
 }
 
-// ── Connection placeholder ─────────────────────────────
+// ── Connection ─────────────────────────────────────────
 function setStatus(state) {
   const dot  = document.getElementById('statusDot');
   const text = document.getElementById('statusText');
   dot.className = 'status-dot';
-  if (state === 'connected')  { dot.classList.add('connected'); text.textContent = 'Connected'; }
-  else if (state === 'error') { dot.classList.add('error');     text.textContent = 'Error'; }
-  else                        { text.textContent = 'Not connected'; }
+  if      (state === 'connected')   { dot.classList.add('connected');  text.textContent = 'Connected'; }
+  else if (state === 'connecting')  { dot.classList.add('connecting'); text.textContent = 'Connecting…'; }
+  else if (state === 'error')       { dot.classList.add('error');      text.textContent = 'Error'; }
+  else                              { text.textContent = 'Not connected'; }
 }
 
-/**
- * PLACEHOLDER — replace with real MQTT publish or fetch() call.
- * cmd = { action: 'start'|'stop', zone: N, duration?: mins }
- *
- * MQTT:  client.publish(`hunter/zone/${cmd.zone}`, JSON.stringify(cmd))
- * REST:  fetch(`${baseUrl}/zone?action=${cmd.action}&zone=${cmd.zone}&time=${cmd.duration||0}`)
- */
+function connectMqtt() {
+  const s = loadSettings();
+  if (!s.broker || !s.pass) { showToast('⚙️ Enter broker settings first'); openSettings(); return; }
+  if (mqttClient) { mqttClient.end(true); mqttClient = null; }
+  setStatus('connecting');
+  mqttClient = mqtt.connect(s.broker, {
+    username: s.user,
+    password: s.pass,
+    clientId: 'hunter-ui-' + Math.random().toString(16).slice(2, 10),
+    clean: true,
+  });
+  mqttClient.on('connect', () => { setStatus('connected'); showToast('✅ Connected'); });
+  mqttClient.on('error',   () =>   setStatus('error'));
+  mqttClient.on('offline', () =>   setStatus('disconnected'));
+  mqttClient.on('close',   () =>   setStatus('disconnected'));
+}
+
 function sendCommand(cmd) {
-  console.log('[Hunter] Command (placeholder):', cmd);
+  if (!mqttClient || !mqttClient.connected) { showToast('⚠️ Not connected'); return; }
+  const { topic } = loadSettings();
+  mqttClient.publish(`${topic || 'hunter/zone'}/${cmd.zone}`, JSON.stringify(cmd));
 }
 
 // ── Toast ──────────────────────────────────────────────
@@ -864,6 +872,7 @@ function showToast(msg) {
 
 // ── Init ───────────────────────────────────────────────
 render();
+if (loadSettings().pass) connectMqtt();
 </script>
 </body>
 </html>
