@@ -1,3 +1,6 @@
+// Based on HunterRoam by Eloi Codina (https://github.com/ecodina/hunter-wifi)
+// Copyright (C) 2020 Eloi Codina. Licensed under GPL v3.
+// Ported from ESP8266 to ESP32.
 #pragma once
 #include <vector>
 #include <Arduino.h>
