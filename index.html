@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="theme-color" content="#1e5c3a" />
+  <title>Hunter Zones</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --green-deep:   #1a4d2e;
+      --green-bg:     #1e5c3a;
+      --green-mid:    #256b43;
+      --green-card:   #2a7a4e;
+      --green-light:  #338c5a;
+      --gold:         #f0a500;
+      --gold-light:   #f7c948;
+      --gold-pale:    #fde9a2;
+      --terra:        #d4622a;
+      --terra-light:  #e8845a;
+      --cream:        #fdf6e3;
+      --text:         #fdf6e3;
+      --text-muted:   rgba(253,246,227,0.55);
+      --border:       rgba(253,246,227,0.12);
+      --active-glow:  0 4px 24px rgba(240,165,0,0.4);
+      --font-head:    'Fredoka', sans-serif;
+      --font-body:    'Nunito', sans-serif;
+      --safe-top:     env(safe-area-inset-top, 0px);
+      --safe-bot:     env(safe-area-inset-bottom, 0px);
+    }
+
+    html, body {
+      min-height: 100%;
+      background: var(--green-bg);
+      color: var(--text);
+      font-family: var(--font-body);
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    /* Grain texture overlay */
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 999;
+      opacity: 0.4;
+    }
+
+    /* Subtle radial depth */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 70% 50% at 50% 0%, rgba(255,255,255,0.06) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 60% at 10% 100%, rgba(26,77,46,0.6) 0%, transparent 50%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    #app {
+      position: relative;
+      z-index: 1;
+      min-height: 100vh;
+      max-width: 480px;
+      margin: 0 auto;
+      padding: calc(var(--safe-top) + 20px) 18px calc(var(--safe-bot) + 32px);
+      display: flex;
+      flex-direction: column;
+      gap: 22px;
+    }
+
+    /* ── Header ── */
+    header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      padding-top: 6px;
+    }
+
+    .header-left { display: flex; flex-direction: column; gap: 2px; }
+
+    .header-left h1 {
+      font-family: var(--font-head);
+      font-size: 34px;
+      font-weight: 700;
+      color: var(--gold);
+      letter-spacing: 0.02em;
+      line-height: 1;
+      text-shadow: 2px 3px 0px rgba(0,0,0,0.2);
+    }
+
+    .header-left .subtitle {
+      font-family: var(--font-body);
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      letter-spacing: 0.05em;
+    }
+
+    /* leaf icon in header */
+    .header-icon {
+      font-size: 28px;
+      line-height: 1;
+      margin-top: 2px;
+      filter: drop-shadow(1px 2px 3px rgba(0,0,0,0.25));
+      animation: sway 4s ease-in-out infinite;
+    }
+
+    @keyframes sway {
+      0%, 100% { transform: rotate(-4deg); }
+      50%       { transform: rotate(4deg); }
+    }
+
+    .status-pill {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(0,0,0,0.2);
+      border: 1.5px solid var(--border);
+      border-radius: 100px;
+      padding: 7px 13px;
+      font-family: var(--font-body);
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+
+    .status-pill:active { opacity: 0.7; transform: scale(0.96); }
+
+    .status-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      flex-shrink: 0;
+      transition: background 0.3s;
+    }
+    .status-dot.connected { background: var(--gold-light); box-shadow: 0 0 8px var(--gold); }
+    .status-dot.error     { background: var(--terra); }
+
+    /* ── Duration ── */
+    .duration-row { display: flex; flex-direction: column; gap: 10px; }
+
+    .section-label {
+      font-family: var(--font-head);
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--gold-pale);
+      letter-spacing: 0.03em;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .duration-chips {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .chip {
+      background: rgba(0,0,0,0.18);
+      border: 1.5px solid var(--border);
+      border-radius: 100px;
+      padding: 8px 16px;
+      font-family: var(--font-body);
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.18s;
+      user-select: none;
+    }
+
+    .chip:active { transform: scale(0.93); }
+
+    .chip.selected {
+      background: var(--gold);
+      border-color: var(--gold);
+      color: var(--green-deep);
+      box-shadow: 0 3px 0 #c07800, 0 4px 12px rgba(240,165,0,0.3);
+    }
+
+    .chip-custom { display: flex; align-items: center; gap: 4px; }
+    .chip-custom input {
+      width: 38px;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--green-deep);
+      font-family: var(--font-body);
+      font-weight: 700;
+      font-size: 13px;
+      text-align: center;
+    }
+    .chip-custom input::placeholder { color: rgba(26,77,46,0.5); }
+    .chip.selected .chip-custom input { color: var(--green-deep); }
+    .chip:not(.selected) .chip-custom input { color: var(--text-muted); }
+    .chip:not(.selected) .chip-unit { color: var(--text-muted); }
+    .chip-unit { font-size: 13px; font-weight: 700; color: var(--green-deep); }
+
+
+
+    /* ── Zone Grid ── */
+    .zone-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    /* ── Zone Card ── */
+    .zone-card {
+      background: var(--green-card);
+      border: 2px solid rgba(253,246,227,0.1);
+      border-radius: 20px;
+      padding: 16px 14px 14px;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      transition: border-color 0.25s, transform 0.15s, box-shadow 0.25s;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      box-shadow: 0 3px 0px var(--green-deep), 0 5px 12px rgba(0,0,0,0.2);
+      top: 0;
+    }
+
+    /* decorative circle */
+    .zone-card::before {
+      content: '';
+      position: absolute;
+      width: 80px; height: 80px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.04);
+      top: -20px; right: -20px;
+      transition: transform 0.3s, background 0.3s;
+    }
+
+    .zone-card.active {
+      border-color: var(--gold);
+      background: var(--green-light);
+      box-shadow: var(--active-glow), 0 3px 0px #1a4d2e;
+    }
+
+    .zone-card.active::before {
+      background: rgba(240,165,0,0.1);
+      transform: scale(1.4);
+    }
+
+    .zone-card:active {
+      top: 2px;
+      box-shadow: 0 1px 0px var(--green-deep), 0 2px 8px rgba(0,0,0,0.2);
+    }
+
+    .zone-number {
+      font-family: var(--font-head);
+      font-size: 36px;
+      font-weight: 700;
+      color: rgba(253,246,227,0.25);
+      line-height: 1;
+      transition: color 0.25s;
+    }
+
+    .zone-card.active .zone-number { color: var(--gold); }
+
+    .zone-name {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-muted);
+      margin-top: 2px;
+      margin-bottom: 12px;
+      transition: color 0.25s;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .zone-card.active .zone-name { color: var(--cream); }
+
+    .zone-timer {
+      font-family: var(--font-body);
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--gold-light);
+      margin-bottom: 8px;
+      height: 14px;
+      visibility: hidden;
+    }
+    .zone-card.active .zone-timer { visibility: visible; }
+
+    .zone-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .zone-status {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .zone-card.active .zone-status { color: var(--gold-light); }
+
+    /* toggle switch */
+    .zone-toggle {
+      width: 34px; height: 20px;
+      background: rgba(0,0,0,0.25);
+      border-radius: 100px;
+      position: relative;
+      transition: background 0.25s;
+      flex-shrink: 0;
+      border: 1.5px solid rgba(255,255,255,0.1);
+    }
+    .zone-card.active .zone-toggle { background: var(--gold); border-color: var(--gold); }
+    .zone-toggle::after {
+      content: '';
+      position: absolute;
+      width: 14px; height: 14px;
+      border-radius: 50%;
+      background: white;
+      top: 2px; left: 2px;
+      transition: transform 0.25s cubic-bezier(0.34,1.56,0.64,1);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    }
+    .zone-card.active .zone-toggle::after { transform: translateX(14px); }
+
+    /* sprinkler drops when active */
+    .zone-drops {
+      position: absolute;
+      top: 7px; right: 7px;
+      width: 46px; height: 44px;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    .zone-drops span { position: absolute; line-height: 1; }
+    .zone-drops span:nth-child(1) { font-size: 24px; bottom: 0; left: 0;   }
+    .zone-drops span:nth-child(2) { font-size: 14px; top: 2px;  right: 0;  }
+    .zone-drops span:nth-child(3) { font-size: 18px; top: 10px; left: 16px; }
+    .zone-card.active .zone-drops { opacity: 1; }
+    .zone-card.active .zone-drops span:nth-child(1) { animation: drip 1.8s ease-in-out infinite 0.0s; }
+    .zone-card.active .zone-drops span:nth-child(2) { animation: drip 1.8s ease-in-out infinite 0.6s; }
+    .zone-card.active .zone-drops span:nth-child(3) { animation: drip 1.8s ease-in-out infinite 1.2s; }
+
+    @keyframes drip {
+      0%        { transform: translateY(0)    scale(1);    opacity: 1; }
+      55%       { transform: translateY(10px) scale(0.7);  opacity: 0; }
+      56%       { transform: translateY(-5px) scale(1);    opacity: 0; }
+      80%, 100% { transform: translateY(0)    scale(1);    opacity: 1; }
+    }
+
+    /* ── Rename Modal ── */
+    .modal-overlay {
+      position: fixed; inset: 0;
+      background: rgba(26,77,46,0.85);
+      backdrop-filter: blur(10px);
+      z-index: 100;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s;
+    }
+    .modal-overlay.open { opacity: 1; pointer-events: all; }
+
+    .modal {
+      background: var(--green-mid);
+      border: 2px solid rgba(253,246,227,0.15);
+      border-radius: 28px 28px 0 0;
+      padding: 24px 20px calc(var(--safe-bot) + 28px);
+      width: 100%;
+      max-width: 480px;
+      transform: translateY(100%);
+      transition: transform 0.32s cubic-bezier(0.32,0.72,0,1);
+      box-shadow: 0 -8px 40px rgba(0,0,0,0.3);
+    }
+    .modal-overlay.open .modal { transform: translateY(0); }
+
+    .modal-handle {
+      width: 40px; height: 4px;
+      background: var(--border);
+      border-radius: 100px;
+      margin: 0 auto 22px;
+    }
+
+    .modal-title {
+      font-family: var(--font-head);
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--gold);
+      margin-bottom: 16px;
+    }
+
+    .modal-input {
+      width: 100%;
+      background: rgba(0,0,0,0.2);
+      border: 1.5px solid var(--border);
+      border-radius: 14px;
+      padding: 14px 16px;
+      color: var(--text);
+      font-family: var(--font-body);
+      font-size: 15px;
+      font-weight: 600;
+      outline: none;
+      transition: border-color 0.2s;
+      margin-bottom: 16px;
+    }
+    .modal-input:focus { border-color: var(--gold); }
+    .modal-input::placeholder { color: var(--text-muted); }
+
+    .modal-actions { display: flex; gap: 10px; }
+
+    .btn-cancel {
+      flex: 1;
+      background: rgba(0,0,0,0.2);
+      border: 1.5px solid var(--border);
+      border-radius: 14px;
+      padding: 14px;
+      color: var(--text-muted);
+      font-family: var(--font-body);
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-save {
+      flex: 2;
+      background: var(--gold);
+      border: none;
+      border-radius: 14px;
+      padding: 14px;
+      color: var(--green-deep);
+      font-family: var(--font-head);
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+      box-shadow: 0 3px 0 #c07800;
+    }
+    .btn-cancel:active, .btn-save:active { transform: scale(0.97); opacity: 0.85; }
+
+    /* ── Settings ── */
+    .settings-row { margin-bottom: 14px; }
+    .settings-row label {
+      display: block;
+      font-family: var(--font-body);
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-muted);
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+
+    /* ── Toast ── */
+    .toast {
+      position: fixed;
+      bottom: calc(var(--safe-bot) + 28px);
+      left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      background: var(--green-deep);
+      border: 1.5px solid var(--gold);
+      border-radius: 100px;
+      padding: 10px 22px;
+      font-family: var(--font-body);
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--gold-pale);
+      z-index: 200;
+      transition: transform 0.3s cubic-bezier(0.32,0.72,0,1), opacity 0.3s;
+      white-space: nowrap;
+      pointer-events: none;
+      opacity: 0;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+    }
+    .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+
+    /* ── Desktop ── */
+    @media (min-width: 600px) {
+      #app { padding-top: 44px; padding-bottom: 44px; }
+      .zone-grid { grid-template-columns: 1fr 1fr 1fr; }
+    }
+
+    /* ── Animations ── */
+    @keyframes popUp {
+      from { opacity: 0; transform: translateY(20px) scale(0.95); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    .zone-card { animation: popUp 0.4s cubic-bezier(0.34,1.3,0.64,1) both; }
+    .zone-card:nth-child(1)  { animation-delay: 0.05s; }
+    .zone-card:nth-child(2)  { animation-delay: 0.10s; }
+    .zone-card:nth-child(3)  { animation-delay: 0.15s; }
+    .zone-card:nth-child(4)  { animation-delay: 0.20s; }
+    .zone-card:nth-child(5)  { animation-delay: 0.25s; }
+    .zone-card:nth-child(6)  { animation-delay: 0.30s; }
+    .zone-card:nth-child(7)  { animation-delay: 0.35s; }
+    .zone-card:nth-child(8)  { animation-delay: 0.40s; }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.5; }
+    }
+    .pulsing { animation: pulse 1.6s ease-in-out infinite; }
+
+    header { animation: popUp 0.5s cubic-bezier(0.34,1.3,0.64,1) both; }
+    .duration-row { animation: popUp 0.5s cubic-bezier(0.34,1.3,0.64,1) 0.08s both; }
+  </style>
+</head>
+<body>
+<div id="app">
+
+  <header>
+    <div class="header-left">
+      <h1>🌿 Hunter</h1>
+      <div class="subtitle">Zone Controller</div>
+    </div>
+    <button class="status-pill" id="statusPill" onclick="openSettings()">
+      <span class="status-dot" id="statusDot"></span>
+      <span id="statusText">Not connected</span>
+    </button>
+  </header>
+
+  <div class="duration-row">
+    <div class="section-label">⏱ Duration</div>
+    <div class="duration-chips" id="durationChips">
+      <div class="chip selected" data-val="10"  onclick="selectDuration(this)">10 min</div>
+      <div class="chip"          data-val="30"  onclick="selectDuration(this)">30 min</div>
+      <div class="chip"          data-val="60"  onclick="selectDuration(this)">1 hr</div>
+      <div class="chip"          data-val="240" onclick="selectDuration(this)">4 hr</div>
+      <div class="chip" id="customChip" onclick="focusCustom()">
+        <span class="chip-custom">
+          <input type="number" id="customInput" placeholder="—" min="1" max="240"
+                 oninput="onCustomInput(this)" onfocus="onCustomFocus()" />
+          <span class="chip-unit">min</span>
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-label">💧 Zones</div>
+
+  <div class="zone-grid" id="zoneGrid"></div>
+
+</div>
+
+<!-- Rename Modal -->
+<div class="modal-overlay" id="renameModal" onclick="closeRenameModal(event)">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="renameTitle">Rename Zone</div>
+    <input class="modal-input" id="renameInput" type="text" placeholder="Zone name" maxlength="24" />
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeRenameModal()">Cancel</button>
+      <button class="btn-save"   onclick="saveRename()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Settings Modal -->
+<div class="modal-overlay" id="settingsModal" onclick="closeSettings(event)">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">⚙️ Connection</div>
+
+    <div class="settings-row">
+      <label>Mode</label>
+      <div class="duration-chips">
+        <div class="chip selected" id="modeMqtt" onclick="selectMode('mqtt')">MQTT</div>
+        <div class="chip"          id="modeRest" onclick="selectMode('rest')">REST / HTTP</div>
+      </div>
+    </div>
+
+    <div id="mqttFields">
+      <div class="settings-row">
+        <label>Broker URL</label>
+        <input class="modal-input" id="cfgBroker" type="text" placeholder="wss://broker.hivemq.com:8884/mqtt" />
+      </div>
+      <div class="settings-row">
+        <label>Topic prefix</label>
+        <input class="modal-input" id="cfgTopic" type="text" placeholder="hunter/zone" />
+      </div>
+      <div class="settings-row">
+        <label>Username (optional)</label>
+        <input class="modal-input" id="cfgUser" type="text" />
+      </div>
+      <div class="settings-row">
+        <label>Password (optional)</label>
+        <input class="modal-input" id="cfgPass" type="password" />
+      </div>
+    </div>
+
+    <div id="restFields" style="display:none">
+      <div class="settings-row">
+        <label>ESP32 Base URL</label>
+        <input class="modal-input" id="cfgRestUrl" type="text" placeholder="http://192.168.1.x" />
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeSettings()">Cancel</button>
+      <button class="btn-save"   onclick="saveSettings()">Connect</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ── State ──────────────────────────────────────────────
+const ZONE_COUNT = 8;
+let duration = 10;
+let renameTarget = null;
+let connMode = 'mqtt';
+
+const zones = Array.from({ length: ZONE_COUNT }, (_, i) => ({
+  id: i + 1,
+  name: loadName(i + 1),
+  active: false,
+  timer: null,
+  remaining: 0,
+}));
+
+// ── Persistence ────────────────────────────────────────
+function loadName(id) {
+  return localStorage.getItem(`zone_name_${id}`) || `Zone ${id}`;
+}
+function saveName(id, name) {
+  localStorage.setItem(`zone_name_${id}`, name);
+}
+function loadSettings() {
+  return JSON.parse(localStorage.getItem('hunter_settings') || '{}');
+}
+function saveSettingsStore(s) {
+  localStorage.setItem('hunter_settings', JSON.stringify(s));
+}
+
+// ── Render ─────────────────────────────────────────────
+function render() {
+  const grid = document.getElementById('zoneGrid');
+  grid.innerHTML = '';
+  let activeCount = 0;
+
+  zones.forEach(z => {
+    if (z.active) activeCount++;
+
+    const card = document.createElement('div');
+    card.className = 'zone-card' + (z.active ? ' active' : '');
+    card.id = `zone-card-${z.id}`;
+    card.innerHTML = `
+      <div class="zone-drops"><span>💧</span><span>💧</span><span>💧</span></div>
+      <div class="zone-number">${String(z.id).padStart(2,'0')}</div>
+      <div class="zone-name">${escHtml(z.name)}</div>
+      <div class="zone-timer${z.active ? ' pulsing' : ''}" id="zone-timer-${z.id}">
+        ${z.active ? '⏱ ' + formatTime(z.remaining) + ' left' : ''}
+      </div>
+      <div class="zone-footer">
+        <span class="zone-status">${z.active ? 'Running' : 'Idle'}</span>
+        <div class="zone-toggle"></div>
+      </div>`;
+
+    card.addEventListener('click', () => toggleZone(z.id));
+    card.addEventListener('contextmenu', e => { e.preventDefault(); openRename(z.id); });
+
+    let pressTimer;
+    card.addEventListener('touchstart', () => { pressTimer = setTimeout(() => openRename(z.id), 600); }, { passive: true });
+    card.addEventListener('touchend',   () => clearTimeout(pressTimer));
+    card.addEventListener('touchmove',  () => clearTimeout(pressTimer));
+
+    grid.appendChild(card);
+  });
+
+  const ac = document.getElementById('activeCount');
+  ac.textContent = activeCount > 0 ? `${activeCount} running 💧` : '';
+  ac.classList.toggle('visible', activeCount > 0);
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function formatTime(sec) {
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${m}:${String(s).padStart(2,'0')}`;
+}
+
+// ── Zone toggle ────────────────────────────────────────
+function toggleZone(id) {
+  const z = zones[id - 1];
+  if (z.active) {
+    deactivateZone(id);
+    sendCommand({ action: 'stop', zone: id });
+    showToast(`🛑 Zone ${id} stopped`);
+  } else {
+    zones.forEach(other => {
+      if (other.active) {
+        deactivateZone(other.id);
+        sendCommand({ action: 'stop', zone: other.id });
+      }
+    });
+    activateZone(id, duration);
+    sendCommand({ action: 'start', zone: id, duration });
+    showToast(`💧 Zone ${id} → ${duration} min`);
+  }
+}
+
+function activateZone(id, mins) {
+  const z = zones[id - 1];
+  if (z.timer) clearInterval(z.timer);
+  z.active = true;
+  z.remaining = mins * 60;
+  z.timer = setInterval(() => {
+    z.remaining--;
+    if (z.remaining <= 0) {
+      deactivateZone(id);
+    } else {
+      const el = document.getElementById(`zone-timer-${id}`);
+      if (el) el.textContent = '⏱ ' + formatTime(z.remaining) + ' left';
+    }
+  }, 1000);
+  updateZoneCard(id);
+}
+
+function deactivateZone(id) {
+  const z = zones[id - 1];
+  if (z.timer) clearInterval(z.timer);
+  z.active = false;
+  z.timer = null;
+  z.remaining = 0;
+  updateZoneCard(id);
+}
+
+function updateZoneCard(id) {
+  const z = zones[id - 1];
+  const card = document.getElementById(`zone-card-${id}`);
+  if (!card) return;
+  card.classList.toggle('active', z.active);
+  const timer = document.getElementById(`zone-timer-${id}`);
+  if (timer) {
+    timer.classList.toggle('pulsing', z.active);
+    timer.textContent = z.active ? '⏱ ' + formatTime(z.remaining) + ' left' : '';
+  }
+  card.querySelector('.zone-status').textContent = z.active ? 'Running' : 'Idle';
+}
+
+// ── Duration ───────────────────────────────────────────
+function selectDuration(el) {
+  document.querySelectorAll('.chip[data-val]').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+  document.getElementById('customInput').value = '';
+  duration = parseInt(el.dataset.val);
+}
+function focusCustom() { document.getElementById('customInput').focus(); }
+function onCustomFocus() {
+  document.querySelectorAll('.chip[data-val]').forEach(c => c.classList.remove('selected'));
+  document.getElementById('customChip').classList.add('selected');
+}
+function onCustomInput(input) {
+  const v = parseInt(input.value);
+  if (v > 0 && v <= 240) duration = v;
+}
+
+// ── Rename ─────────────────────────────────────────────
+function openRename(id) {
+  renameTarget = id;
+  document.getElementById('renameTitle').textContent = `🌿 Rename Zone ${id}`;
+  document.getElementById('renameInput').value = zones[id - 1].name;
+  document.getElementById('renameModal').classList.add('open');
+  setTimeout(() => document.getElementById('renameInput').focus(), 350);
+}
+function closeRenameModal(e) {
+  if (!e || e.target === document.getElementById('renameModal'))
+    document.getElementById('renameModal').classList.remove('open');
+}
+function saveRename() {
+  const val = document.getElementById('renameInput').value.trim();
+  if (val && renameTarget) { zones[renameTarget - 1].name = val; saveName(renameTarget, val); render(); }
+  document.getElementById('renameModal').classList.remove('open');
+}
+document.getElementById('renameInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') saveRename();
+  if (e.key === 'Escape') closeRenameModal();
+});
+
+// ── Settings ───────────────────────────────────────────
+function openSettings() {
+  const s = loadSettings();
+  if (s.broker)  document.getElementById('cfgBroker').value  = s.broker;
+  if (s.topic)   document.getElementById('cfgTopic').value   = s.topic;
+  if (s.user)    document.getElementById('cfgUser').value    = s.user;
+  if (s.restUrl) document.getElementById('cfgRestUrl').value = s.restUrl;
+  document.getElementById('settingsModal').classList.add('open');
+}
+function closeSettings(e) {
+  if (!e || e.target === document.getElementById('settingsModal'))
+    document.getElementById('settingsModal').classList.remove('open');
+}
+function selectMode(mode) {
+  connMode = mode;
+  document.getElementById('modeMqtt').classList.toggle('selected', mode === 'mqtt');
+  document.getElementById('modeRest').classList.toggle('selected', mode === 'rest');
+  document.getElementById('mqttFields').style.display = mode === 'mqtt' ? '' : 'none';
+  document.getElementById('restFields').style.display = mode === 'rest' ? '' : 'none';
+}
+function saveSettings() {
+  const s = {
+    mode:    connMode,
+    broker:  document.getElementById('cfgBroker').value.trim(),
+    topic:   document.getElementById('cfgTopic').value.trim() || 'hunter/zone',
+    user:    document.getElementById('cfgUser').value.trim(),
+    pass:    document.getElementById('cfgPass').value,
+    restUrl: document.getElementById('cfgRestUrl').value.trim(),
+  };
+  saveSettingsStore(s);
+  closeSettings();
+  showToast('✅ Settings saved');
+  setStatus('disconnected');
+  // TODO: init real MQTT / REST connection
+}
+
+// ── Connection placeholder ─────────────────────────────
+function setStatus(state) {
+  const dot  = document.getElementById('statusDot');
+  const text = document.getElementById('statusText');
+  dot.className = 'status-dot';
+  if (state === 'connected')  { dot.classList.add('connected'); text.textContent = 'Connected'; }
+  else if (state === 'error') { dot.classList.add('error');     text.textContent = 'Error'; }
+  else                        { text.textContent = 'Not connected'; }
+}
+
+/**
+ * PLACEHOLDER — replace with real MQTT publish or fetch() call.
+ * cmd = { action: 'start'|'stop', zone: N, duration?: mins }
+ *
+ * MQTT:  client.publish(`hunter/zone/${cmd.zone}`, JSON.stringify(cmd))
+ * REST:  fetch(`${baseUrl}/zone?action=${cmd.action}&zone=${cmd.zone}&time=${cmd.duration||0}`)
+ */
+function sendCommand(cmd) {
+  console.log('[Hunter] Command (placeholder):', cmd);
+}
+
+// ── Toast ──────────────────────────────────────────────
+let toastTimer;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+// ── Init ───────────────────────────────────────────────
+render();
+</script>
+</body>
+</html>
