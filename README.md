@@ -1,5 +1,12 @@
 # irrigation-controller
 
+## MQTT Topics
+
+| Topic | Subscribe | Description |
+|-------|-----------|-------------|
+| `hunter/zone/#` | ESP32 | Commands from the UI (start/stop per zone) |
+| `hunter/log` | You | ESP32 logs: boot, commands, errors, heartbeat |
+
 A simple UI to control the irrigation in my yard via an ESP32 connected to a Hunter irrigation controller.
 
 ## Credits & License
