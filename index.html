@@ -857,7 +857,7 @@ function connectMqtt() {
 function sendCommand(cmd) {
   if (!mqttClient || !mqttClient.connected) { showToast('⚠️ Not connected'); return; }
   const { topic } = loadSettings();
-  mqttClient.publish(`${topic || 'hunter/zone'}/${cmd.zone}`, JSON.stringify(cmd));
+  mqttClient.publish(`${topic || 'hunter/zone'}/${cmd.zone}`, JSON.stringify(cmd), { qos: 1 });
 }
 
 // ── Toast ──────────────────────────────────────────────

@@ -5,12 +5,21 @@
 #include "secrets.h"
 
 // ── Configuration ──────────────────────────────────────
-const int HUNTER_PIN = 4;  // GPIO connected to Hunter bus via transistor
+const int           HUNTER_PIN          = 4;
+const char*         LOG_TOPIC           = "hunter/log";
+const unsigned long HEARTBEAT_INTERVAL  = 5UL * 60 * 1000;
 
 // ── Globals ────────────────────────────────────────────
 WiFiClientSecure net;
 PubSubClient     client(net);
 HunterRoam       hunter(HUNTER_PIN);
+unsigned long    lastHeartbeat = 0;
+
+// ── Logging ────────────────────────────────────────────
+void mqttLog(const String& msg) {
+  Serial.println(msg);
+  if (client.connected()) client.publish(LOG_TOPIC, msg.c_str());
+}
 
 // ── JSON helpers (avoids ArduinoJson dependency) ───────
 int jsonInt(const String& json, const char* key) {
@@ -30,12 +39,12 @@ void onMessage(char* topic, byte* payload, unsigned int len) {
   String t   = String(topic);
 
   int zone = t.substring(t.lastIndexOf('/') + 1).toInt();
-  if (zone < 1 || zone > 8) { Serial.println("Invalid zone in topic"); return; }
+  if (zone < 1 || zone > 8) { mqttLog("Invalid zone in topic"); return; }
 
   bool isStart = jsonContains(msg, "\"start\"");
   int  dur     = jsonInt(msg, "duration");
 
-  Serial.printf("[MQTT] zone=%d action=%s dur=%d\n", zone, isStart ? "start" : "stop", dur);
+  mqttLog("[MQTT] zone=" + String(zone) + " action=" + (isStart ? "start" : "stop") + " dur=" + String(dur));
 
   byte err;
   if (isStart && dur > 0) {
@@ -44,7 +53,8 @@ void onMessage(char* topic, byte* payload, unsigned int len) {
     err = hunter.stopZone((byte)zone);
   }
 
-  if (err) Serial.println("Hunter error: " + hunter.errorHint(err));
+  if (err) mqttLog("[Hunter] error: " + hunter.errorHint(err));
+  else     mqttLog("[Hunter] zone=" + String(zone) + " " + (isStart ? "start" : "stop") + " OK");
 }
 
 // ── WiFi ───────────────────────────────────────────────
@@ -62,7 +72,8 @@ void connectMqtt() {
     String clientId = "esp32-hunter-" + String((uint32_t)ESP.getEfuseMac(), HEX);
     if (client.connect(clientId.c_str(), MQTT_USER, MQTT_PASS)) {
       Serial.println(" OK");
-      client.subscribe(MQTT_TOPIC);
+      client.subscribe(MQTT_TOPIC, 1);
+      mqttLog("[Boot] connected ip=" + WiFi.localIP().toString() + " rssi=" + String(WiFi.RSSI()) + "dBm");
     } else {
       Serial.printf(" failed rc=%d, retrying in 5s\n", client.state());
       delay(5000);
@@ -83,4 +94,10 @@ void setup() {
 void loop() {
   if (!client.connected()) connectMqtt();
   client.loop();
+
+  unsigned long now = millis();
+  if (now - lastHeartbeat >= HEARTBEAT_INTERVAL) {
+    lastHeartbeat = now;
+    mqttLog("[Health] uptime=" + String(now / 1000) + "s rssi=" + String(WiFi.RSSI()) + "dBm heap=" + String(ESP.getFreeHeap()));
+  }
 }
